@@ -4,6 +4,8 @@
 
 #include "Engine/Core/Types/String.h"
 #include "Engine/Core/ISerializable.h"
+#include "Engine/Core/Collections/Array.h"
+
 
 API_STRUCT() struct BusCompoment : ISerializable
 {
@@ -27,4 +29,10 @@ API_STRUCT() struct BusCompoment : ISerializable
     /// </summary>
     API_FIELD(Attributes = "EditorOrder(30)")
     bool IsMuted;
+
+    /// <summary>
+    /// Collects all the effects a bus might have
+    /// </summary>
+    API_FIELD(Attributes = "EditorOrder(40)")
+    Array<int> BusEffects;
 };
