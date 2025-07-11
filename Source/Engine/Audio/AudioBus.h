@@ -6,11 +6,15 @@
 #include "Engine/Core/ISerializable.h"
 #include "Engine/Core/Collections/Array.h"
 
+API_ENUM() enum class AudioEffects
+{
+    None
+};
 
-API_STRUCT() struct BusCompoment : ISerializable
+API_STRUCT() struct AudioBus : ISerializable
 {
     API_AUTO_SERIALIZATION();
-    DECLARE_SCRIPTING_TYPE_MINIMAL(BusCompoment);
+    DECLARE_SCRIPTING_TYPE_MINIMAL(AudioBus);
 
     /// <summary>
     ///  Name of Audio Bus
@@ -34,5 +38,5 @@ API_STRUCT() struct BusCompoment : ISerializable
     /// Collects all the effects a bus might have
     /// </summary>
     API_FIELD(Attributes = "EditorOrder(40)")
-    Array<int> BusEffects;
+    Array<AudioEffects> BusEffects;
 };
