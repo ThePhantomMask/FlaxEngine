@@ -39,5 +39,11 @@ API_STRUCT() struct AudioBus : ISerializable
     /// Collects all the effects a bus might have
     /// </summary>
     API_FIELD(Attributes = "EditorOrder(40)")
-    Dictionary<AudioEffects,int> BusEffects;
+    Dictionary<AudioEffects,String> BusEffects;
+
+    /// <summary>
+    /// Report which bus will be conditioned
+    /// </summary>
+    API_FIELD(Attributes = "EditorOrder(50)")
+    String ParentBus;
 };
