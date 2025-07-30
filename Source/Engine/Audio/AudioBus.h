@@ -9,7 +9,18 @@
 API_ENUM() enum class AudioEffects
 {
     None,
-    Filter
+    Reverb,
+    Echo,
+    Delay,
+    Chorus,
+    Flanger,
+    Distortion,
+    Compressor,
+    Limiter,
+    Equalizer,
+    PitchShifter,
+    LowPass,
+    HighPass
 };
 
 API_STRUCT() struct AudioBus : ISerializable
@@ -39,7 +50,7 @@ API_STRUCT() struct AudioBus : ISerializable
     /// Collects all the effects a bus might have
     /// </summary>
     API_FIELD(Attributes = "EditorOrder(40)")
-    Dictionary<AudioEffects,String> BusEffects;
+    Dictionary<int,AudioEffects> BusEffects;
 
     /// <summary>
     /// Report which bus will be conditioned
