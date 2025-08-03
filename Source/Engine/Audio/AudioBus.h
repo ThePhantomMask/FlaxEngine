@@ -35,10 +35,10 @@ API_STRUCT() struct AudioBus : ISerializable
     String Name;
 
     /// <summary>
-    /// Volume of Audio Bus (which will be converted to decibel scale)
+    /// Volume in dB of Audio Bus
     /// </summary>
-    API_FIELD(Attributes = "EditorOrder(20), Limit(0, 1)")
-    float Volume = 1;
+    API_FIELD(Attributes = "EditorOrder(20), Limit(-80, 20)")
+    float VolumeDB = 0.0f;
     
     /// <summary>
     /// If Audio Bus is muted or not
