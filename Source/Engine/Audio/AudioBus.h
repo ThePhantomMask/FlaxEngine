@@ -4,7 +4,7 @@
 
 #include "Engine/Core/Types/String.h"
 #include "Engine/Core/ISerializable.h"
-#include "Engine/Core/Collections/Dictionary.h"
+#include "Engine/Core/Collections/Array.h"
 
 API_ENUM() enum class AudioEffects
 {
@@ -50,7 +50,7 @@ API_STRUCT() struct AudioBus : ISerializable
     /// Collects all the effects a bus might have
     /// </summary>
     API_FIELD(Attributes = "EditorOrder(40)")
-    Dictionary<int,AudioEffects> BusEffects;
+    Array<AudioEffects> BusEffects;
 
     /// <summary>
     /// Report which bus will be conditioned
