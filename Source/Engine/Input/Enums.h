@@ -336,6 +336,22 @@ API_ENUM() enum class InputGamepadIndex
 };
 
 /// <summary>
+/// The input axis mapping type
+/// </summary>
+API_ENUM() enum class AxisMappingType 
+{
+    /// <summary>
+    /// Axis Type
+    /// </summary>
+    Axis = 0,
+
+    /// <summary>
+    /// Vector Type
+    /// </summary>
+    Vector = 1
+};
+
+/// <summary>
 /// The input axes types.
 /// </summary>
 API_ENUM() enum class InputAxisType
