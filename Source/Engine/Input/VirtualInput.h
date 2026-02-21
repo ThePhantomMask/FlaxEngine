@@ -63,6 +63,11 @@ API_STRUCT() struct AxisConfig
     API_FIELD(Attributes="EditorOrder(0)")
     String Name;
 
+    API_FIELD(Attributes = "EditorOrder(10)")
+    AxisMappingType Type;
+
+    bool IsAxisMappings = Type == AxisMappingType::Axis;
+
     /// <summary>
     /// The axis type (mouse, gamepad, etc.).
     /// </summary>
