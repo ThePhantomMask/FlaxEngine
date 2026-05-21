@@ -863,6 +863,7 @@ void AnimatedModel::OnActiveInTreeChanged()
 void AnimatedModel::UpdateBounds()
 {
     const auto model = SkinnedModel.Get();
+    BoundingSphere prevSphere = _sphere;
     if (CustomBounds.GetSize().LengthSquared() > 0.01f)
     {
         BoundingBox::Transform(CustomBounds, _transform, _box);
@@ -893,7 +894,7 @@ void AnimatedModel::UpdateBounds()
         _box = BoundingBox(_transform.Translation);
     }
     BoundingSphere::FromBox(_box, _sphere);
-    if (_sceneRenderingKey != -1)
+    if (_sceneRenderingKey != -1 && prevSphere != _sphere)
         GetSceneRendering()->UpdateActor(this, _sceneRenderingKey, ISceneRenderingListener::Bounds);
 }
 
@@ -940,7 +941,7 @@ void AnimatedModel::OnAnimationUpdated_Async()
         _skinningData.OnDataChanged(!PerBoneMotionBlur);
     }
 
-    if (UpdateWhenOffscreen) 
+    //if (UpdateWhenOffscreen)
     {
         UpdateBounds();
     }
@@ -1331,6 +1332,11 @@ MaterialBase* AnimatedModel::GetMaterial(int32 entryIndex)
     return material;
 }
 
+ModelBase* AnimatedModel::GetModel()
+{
+    return SkinnedModel.Get();
+}
+
 bool AnimatedModel::IntersectsEntry(int32 entryIndex, const Ray& ray, Real& distance, Vector3& normal)
 {
     auto model = SkinnedModel.Get();
@@ -1395,6 +1401,16 @@ bool AnimatedModel::GetMeshData(const MeshReference& ref, MeshBufferType type, B
     auto& lod = model->LODs[Math::Min(ref.LODIndex, model->LODs.Count() - 1)];
     auto& mesh = lod.Meshes[Math::Min(ref.MeshIndex, lod.Meshes.Count() - 1)];
     return mesh.DownloadDataCPU(type, result, count, layout);
+}
+
+MeshBase* AnimatedModel::GetMesh(const MeshReference& ref) const
+{
+    const auto model = SkinnedModel.Get();
+    if (!model || model->WaitForLoaded())
+        return nullptr;
+    auto& lod = model->LODs[Math::Min(ref.LODIndex, model->LODs.Count() - 1)];
+    auto& mesh = lod.Meshes[Math::Min(ref.MeshIndex, lod.Meshes.Count() - 1)];
+    return &mesh;
 }
 
 MeshDeformation* AnimatedModel::GetMeshDeformation() const
