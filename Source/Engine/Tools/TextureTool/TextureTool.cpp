@@ -276,6 +276,11 @@ bool TextureTool::ImportTexture(const StringView& path, TextureData& textureData
         bool hasAlpha = false;
         return ImportTextureKtx(path, textureData, options, errorMsg, hasAlpha);
     }
+    else if (type == ImageType::KTX2)
+    {
+        bool hasAlpha = false;
+        return ImportTextureKtx2(path, textureData, options, errorMsg, hasAlpha);
+    }
 
     // Clamp values
     options.MaxSize = Math::Clamp(options.MaxSize, 1, GPU_MAX_TEXTURE_SIZE);
@@ -713,6 +718,10 @@ bool TextureTool::GetImageType(const StringView& path, ImageType& type)
     else if (extension == TEXT("ktx"))
     {
         type = ImageType::KTX;
+    }
+    else if (extension == TEXT("ktx2"))
+    {
+        type = ImageType::KTX2;
     }
     else
     {

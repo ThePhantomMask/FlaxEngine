@@ -235,12 +235,15 @@ private:
         RAW,
         EXR,
         KTX,
+        KTX2,
         Internal,
     };
 
     static bool GetImageType(const StringView& path, ImageType& type);
     static bool ImportTextureKtx(const StringView& path, TextureData& textureData, bool& hasAlpha);
     static bool ImportTextureKtx(const StringView& path, TextureData& textureData, const Options& options, String& errorMsg, bool& hasAlpha);
+    static bool ImportTextureKtx2(const StringView& path, TextureData& textureData, bool& hasAlpha);
+    static bool ImportTextureKtx2(const StringView& path, TextureData& textureData, const Options& options, String& errorMsg, bool& hasAlpha);
     static bool Transform(TextureData& texture, const Function<void(Color&)>& transformation);
 
 #if COMPILE_WITH_DIRECTXTEX

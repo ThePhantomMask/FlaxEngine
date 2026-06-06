@@ -144,6 +144,12 @@ namespace FlaxEditor.Content.Import
                 _settings.Settings.GenerateMipMaps = false;
                 _settings.Settings.sRGB = true;
             }
+            else if (extension == ".ktx2")
+            {
+                // Preserve embedded mip chain from KTX 2.0 source.
+                _settings.Settings.GenerateMipMaps = false;
+                _settings.Settings.sRGB = true;
+            }
             else if (_settings.Settings.Type != TextureFormatType.ColorRGB)
             {
                 // Skip checking

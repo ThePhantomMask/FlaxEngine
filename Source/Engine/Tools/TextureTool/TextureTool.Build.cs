@@ -19,6 +19,7 @@ public class TextureTool : EngineModule
         options.SourceFiles.Add(Path.Combine(FolderPath, "TextureTool.cpp"));
         options.SourceFiles.Add(Path.Combine(FolderPath, "TextureTool.h"));
         options.SourceFiles.Add(Path.Combine(FolderPath, "TextureTool.ktx.cpp"));
+        options.SourceFiles.Add(Path.Combine(FolderPath, "TextureTool.ktx2.cpp"));
 
         bool useDirectXTex = false;
         bool useStb = false;
