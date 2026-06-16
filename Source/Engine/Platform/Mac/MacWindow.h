@@ -17,13 +17,16 @@ private:
     void* _window = nullptr;
     void* _view = nullptr;
     bool _isMouseOver = false;
+    bool _hasRestoreClientBounds = false;
+    Rectangle _restoreClientBounds;
     Float2 _mouseTrackPos = Float2::Minimum;
     String _dragText;
 
 public:
 	MacWindow(const CreateWindowSettings& settings);
-	~MacWindow();
+	~MacWindow() override;
 
+    void SyncWindowState();
     void CheckForResize(float width, float height);
     void SetIsMouseOver(bool value);
     const String& GetDragText() const
@@ -37,6 +40,7 @@ public:
     void OnUpdate(float dt) override;
     void Show() override;
     void Hide() override;
+    void Close(ClosingReason reason) override;
     void Minimize() override;
     void Maximize() override;
     void Restore() override;
@@ -55,9 +59,11 @@ public:
     void Focus() override;
     void SetTitle(const StringView& title) override;
 	DragDropEffect DoDragDrop(const StringView& data) override;
+    using WindowBase::DoDragDrop;
     void StartTrackingMouse(bool useMouseScreenOffset) override;
     void EndTrackingMouse() override;
 	void SetCursor(CursorType type) override;
+    void SetIcon(TextureData& icon) override;
 };
 
 #endif

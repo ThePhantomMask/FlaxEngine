@@ -80,8 +80,9 @@ namespace FlaxEditor.Surface
                 var result = new List<SurfaceComment>();
                 for (int i = 0; i < RootControl.Children.Count; i++)
                 {
-                    if (RootControl.Children[i] is SurfaceComment comment)
-                        result.Add(comment);
+                    var child = RootControl.Children[i];
+                    if (child is ResizableSurfaceNode.ResizeBorder border && border.ResizableNode is SurfaceComment comment2)
+                        result.Add(comment2);
                 }
                 return result;
             }
@@ -101,7 +102,8 @@ namespace FlaxEditor.Surface
                 int count = 0;
                 for (int i = 0; i < RootControl.Children.Count; i++)
                 {
-                    if (RootControl.Children[i] is SurfaceComment)
+                    var child = RootControl.Children[i];
+                    if (child is ResizableSurfaceNode.ResizeBorder border && border.ResizableNode is SurfaceComment)
                         count++;
                 }
                 return count;
@@ -254,9 +256,10 @@ namespace FlaxEditor.Surface
         public SurfaceParameter GetParameter(Guid id)
         {
             SurfaceParameter result = null;
-            for (int i = 0; i < Parameters.Count; i++)
+            var parameters = Parameters;
+            for (int i = 0; i < parameters.Count; i++)
             {
-                var parameter = Parameters[i];
+                var parameter = parameters[i];
                 if (parameter.ID == id)
                 {
                     result = parameter;
@@ -274,9 +277,10 @@ namespace FlaxEditor.Surface
         public SurfaceParameter GetParameter(string name)
         {
             SurfaceParameter result = null;
-            for (int i = 0; i < Parameters.Count; i++)
+            var parameters = Parameters;
+            for (int i = 0; i < parameters.Count; i++)
             {
-                var parameter = Parameters[i];
+                var parameter = parameters[i];
                 if (parameter.Name == name)
                 {
                     result = parameter;

@@ -70,6 +70,9 @@ namespace FlaxEditor.Surface.Archetypes
                 if (box.ID != _assetBox.ID)
                     return;
                 _assetSelect.Visible = !box.HasAnyConnection;
+
+                if (!Archetype.Flags.HasFlag(NodeFlags.FixedSize))
+                    ResizeAuto();
             }
         }
 
@@ -243,8 +246,8 @@ namespace FlaxEditor.Surface.Archetypes
                     {
                         Type = NodeElementType.Input,
                         Position = new Float2(
-                                              FlaxEditor.Surface.Constants.NodeMarginX - FlaxEditor.Surface.Constants.BoxOffsetX,
-                                              FlaxEditor.Surface.Constants.NodeMarginY + FlaxEditor.Surface.Constants.NodeHeaderSize + ylevel * FlaxEditor.Surface.Constants.LayoutOffsetY),
+                                              FlaxEditor.Surface.Constants.NodeMarginX,
+                                              FlaxEditor.Surface.Constants.NodeMarginY + FlaxEditor.Surface.Constants.NodeHeaderHeight + ylevel * FlaxEditor.Surface.Constants.LayoutOffsetY),
                         Text = "Pose " + _blendPoses.Count,
                         Single = true,
                         ValueIndex = -1,
@@ -263,7 +266,7 @@ namespace FlaxEditor.Surface.Archetypes
             private void UpdateHeight()
             {
                 float nodeHeight = 10 + (Mathf.Max(_blendPoses.Count, 1) + 3) * FlaxEditor.Surface.Constants.LayoutOffsetY;
-                Height = nodeHeight + FlaxEditor.Surface.Constants.NodeMarginY * 2 + FlaxEditor.Surface.Constants.NodeHeaderSize + FlaxEditor.Surface.Constants.NodeFooterSize;
+                Height = nodeHeight + FlaxEditor.Surface.Constants.NodeMarginY * 2 + FlaxEditor.Surface.Constants.NodeHeaderHeight + FlaxEditor.Surface.Constants.NodeFooterSize;
             }
 
             /// <inheritdoc />
@@ -621,8 +624,8 @@ namespace FlaxEditor.Surface.Archetypes
                 Create = (id, context, arch, groupArch) => new MultiBlend1D(id, context, arch, groupArch),
                 Title = "Multi Blend 1D",
                 Description = "Animation blending in 1D",
-                Flags = NodeFlags.AnimGraph | NodeFlags.VariableValuesSize,
-                Size = new Float2(420, 300),
+                Flags = NodeFlags.AnimGraph | NodeFlags.VariableValuesSize | NodeFlags.FixedSize,
+                Size = new Float2(420, 320),
                 DefaultValues = new object[]
                 {
                     // Node data
@@ -646,9 +649,9 @@ namespace FlaxEditor.Surface.Archetypes
 
                     // Axis X
                     NodeElementArchetype.Factory.Input(3, "X", true, typeof(float), 4),
-                    NodeElementArchetype.Factory.Text(30, 3 * Surface.Constants.LayoutOffsetY + 2, "(min:                   max:                   )"),
-                    NodeElementArchetype.Factory.Vector_X(60, 3 * Surface.Constants.LayoutOffsetY + 2, 0),
-                    NodeElementArchetype.Factory.Vector_Y(145, 3 * Surface.Constants.LayoutOffsetY + 2, 0),
+                    NodeElementArchetype.Factory.Text(30, 3 * Surface.Constants.LayoutOffsetY, "(min:                   max:                   )"),
+                    NodeElementArchetype.Factory.Vector_X(60, 3 * Surface.Constants.LayoutOffsetY, 0),
+                    NodeElementArchetype.Factory.Vector_Y(145, 3 * Surface.Constants.LayoutOffsetY, 0),
                 }
             },
             new NodeArchetype
@@ -657,8 +660,8 @@ namespace FlaxEditor.Surface.Archetypes
                 Create = (id, context, arch, groupArch) => new MultiBlend2D(id, context, arch, groupArch),
                 Title = "Multi Blend 2D",
                 Description = "Animation blending in 2D",
-                Flags = NodeFlags.AnimGraph | NodeFlags.VariableValuesSize,
-                Size = new Float2(420, 620),
+                Flags = NodeFlags.AnimGraph | NodeFlags.VariableValuesSize | NodeFlags.FixedSize,
+                Size = new Float2(420, 640),
                 DefaultValues = new object[]
                 {
                     // Node data
@@ -682,15 +685,15 @@ namespace FlaxEditor.Surface.Archetypes
 
                     // Axis X
                     NodeElementArchetype.Factory.Input(3, "X", true, typeof(float), 4),
-                    NodeElementArchetype.Factory.Text(30, 3 * Surface.Constants.LayoutOffsetY + 2, "(min:                   max:                   )"),
-                    NodeElementArchetype.Factory.Vector_X(60, 3 * Surface.Constants.LayoutOffsetY + 2, 0),
-                    NodeElementArchetype.Factory.Vector_Y(145, 3 * Surface.Constants.LayoutOffsetY + 2, 0),
+                    NodeElementArchetype.Factory.Text(30, 3 * Surface.Constants.LayoutOffsetY, "(min:                   max:                   )"),
+                    NodeElementArchetype.Factory.Vector_X(60, 3 * Surface.Constants.LayoutOffsetY, 0),
+                    NodeElementArchetype.Factory.Vector_Y(145, 3 * Surface.Constants.LayoutOffsetY, 0),
 
                     // Axis Y
                     NodeElementArchetype.Factory.Input(4, "Y", true, typeof(float), 5),
-                    NodeElementArchetype.Factory.Text(30, 4 * Surface.Constants.LayoutOffsetY + 2, "(min:                   max:                   )"),
-                    NodeElementArchetype.Factory.Vector_Z(60, 4 * Surface.Constants.LayoutOffsetY + 2, 0),
-                    NodeElementArchetype.Factory.Vector_W(145, 4 * Surface.Constants.LayoutOffsetY + 2, 0),
+                    NodeElementArchetype.Factory.Text(30, 4 * Surface.Constants.LayoutOffsetY, "(min:                   max:                   )"),
+                    NodeElementArchetype.Factory.Vector_Z(60, 4 * Surface.Constants.LayoutOffsetY, 0),
+                    NodeElementArchetype.Factory.Vector_W(145, 4 * Surface.Constants.LayoutOffsetY, 0),
                 }
             },
             new NodeArchetype
@@ -931,7 +934,7 @@ namespace FlaxEditor.Surface.Archetypes
                 TypeID = 27,
                 Title = "Copy Node",
                 Description = "Copies the skeleton node transformation data (in local space)",
-                Flags = NodeFlags.AnimGraph,
+                Flags = NodeFlags.AnimGraph | NodeFlags.FixedSize,
                 Size = new Float2(260, 140),
                 DefaultValues = new object[]
                 {
@@ -1088,6 +1091,67 @@ namespace FlaxEditor.Surface.Archetypes
                 {
                     Utils.GetEmptyArray<byte>(),
                 },
+            },
+            new NodeArchetype
+            {
+                TypeID = 35,
+                Title = "Spring Bone Physics",
+                Description = "Simulates a soft physics-based trailing motion―like antennae, tails, or cloth strips―for a connected chain of skeletal bones.",
+                Flags = NodeFlags.AnimGraph,
+                Size = new Float2(250, 160),
+                DefaultValues = new object[]
+                {
+                    string.Empty, // End Node
+                    1, // Nodes
+                    1.0f, // Weight
+                    0.0f, // Stiffness
+                    0.1f, // Drag
+                    0.0f, // Stretch Limit
+                    1.0f, // Gravity Scale
+                    Vector3.Zero, // Force
+                },
+                Elements = new[]
+                {
+                    NodeElementArchetype.Factory.Output(0, string.Empty, typeof(void), 0),
+                    NodeElementArchetype.Factory.Input(0, string.Empty, true, typeof(void), 1),
+                    NodeElementArchetype.Factory.Input(1, "Weight", true, typeof(float), 2, 2),
+                    NodeElementArchetype.Factory.Input(2, "Stiffness", true, typeof(float), 3, 3),
+                    NodeElementArchetype.Factory.Input(3, "Drag", true, typeof(float), 4, 4),
+                    NodeElementArchetype.Factory.Input(4, "Stretch Limit", true, typeof(float), 5, 5),
+                    NodeElementArchetype.Factory.Input(5, "Gravity Scale", true, typeof(float), 6, 6),
+                    NodeElementArchetype.Factory.Input(6, "Force", true, typeof(Vector3), 7, 7),
+                    NodeElementArchetype.Factory.SkeletonNodeNameSelect(60, Surface.Constants.LayoutOffsetY * 7, 140, 0),
+                    NodeElementArchetype.Factory.Integer(60, Surface.Constants.LayoutOffsetY * 8, 1, -1, 1, 32),
+                    NodeElementArchetype.Factory.Text(0, Surface.Constants.LayoutOffsetY * 7, "End Node:", tooltip:"The last (tip) node of the spring bones chain to simulate."),
+                    NodeElementArchetype.Factory.Text(0, Surface.Constants.LayoutOffsetY * 8, "Nodes:", tooltip:"Amount of nodes in a chain to simulate, starting from the End Node going up in the hierarchy. Excluding root node the chain is attached to."),
+                }
+            },
+            new NodeArchetype
+            {
+                TypeID = 36,
+                Title = "Per Instance Random",
+                Description = "Per object instance random value (normalized to range 0-1)",
+                Flags = NodeFlags.AnimGraph,
+                Size = new Float2(200, 30),
+                Elements = new[]
+                {
+                    NodeElementArchetype.Factory.Output(0, "", typeof(float), 0),
+                }
+            },
+            new NodeArchetype
+            {
+                TypeID = 37,
+                Title = "Instance Transform",
+                Description = "Animated model transformation (in world space).",
+                Flags = NodeFlags.AnimGraph,
+                Size = new Float2(200, 80),
+                Elements = new[]
+                {
+                    NodeElementArchetype.Factory.Output(0, "", typeof(Transform), 0),
+                    NodeElementArchetype.Factory.Output(1, "Position", typeof(Vector3), 1),
+                    NodeElementArchetype.Factory.Output(2, "Rotation", typeof(Quaternion), 2),
+                    NodeElementArchetype.Factory.Output(3, "Scale", typeof(Float3), 3),
+                }
             },
         };
     }

@@ -448,8 +448,7 @@ void SceneObjectsFactory::PrefabSyncData::InitNewObjects()
 void SceneObjectsFactory::SetupPrefabInstances(Context& context, const PrefabSyncData& data)
 {
     PROFILE_CPU_NAMED("SetupPrefabInstances");
-    const int32 count = data.Data.Size();
-    ASSERT(count <= data.SceneObjects.Count());
+    const int32 count = Math::Min<int32>(data.Data.Size(), data.SceneObjects.Count());
     Dictionary<Guid, Guid> parentIdsLookup;
     for (int32 i = 0; i < count; i++)
     {
@@ -753,7 +752,7 @@ void SceneObjectsFactory::SynchronizePrefabInstances(Context& context, PrefabSyn
             obj->SetOrderInParent(order);
     }
 
-    // Setup hierarchy for the prefab instances (ensure any new objects are connected)
+    // Setup hierarchy for the prefab instances (after adding new objects to ensure they are connected, eg. when reparenting existing prefab into a new root)
     for (const auto& instance : context.Instances)
     {
         const auto& prefabStartData = data.Data[instance.StatIndex];

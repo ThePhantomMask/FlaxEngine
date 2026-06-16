@@ -7,10 +7,10 @@
 
 class Asset;
 struct Transform;
-struct CommonValue;
 template<typename T>
 class AssetReference;
 struct ScriptingTypeHandle;
+template<typename Type> ScriptingTypeHandle StaticType();
 
 /// <summary>
 /// Represents an object type that can be interpreted as more than one type.
@@ -69,10 +69,12 @@ API_STRUCT(InBuild) struct FLAXENGINE_API VariantType
 
         MAX,
 #if USE_LARGE_WORLDS
+        Real = Double,
         Vector2 = Double2,
         Vector3 = Double3,
         Vector4 = Double4,
 #else
+        Real = Float,
         Vector2 = Float2,
         Vector3 = Float3,
         Vector4 = Float4,
@@ -150,6 +152,7 @@ public:
     void SetTypeName(const ScriptingType& type);
     void SetTypeName(const MClass& klass);
     const char* GetTypeName() const;
+    ScriptingTypeHandle GetScriptingType() const;
     VariantType GetElementType() const;
     // Drops custom type name into the name allocated by the scripting module to reduce memory allocations when referencing types.
     void Inline();
@@ -264,7 +267,6 @@ public:
     explicit Variant(Dictionary<Variant, Variant, HeapAllocation>&& v);
     explicit Variant(const Dictionary<Variant, Variant, HeapAllocation>& v);
     explicit Variant(const Span<byte>& v);
-    explicit Variant(const CommonValue& v);
 
     template<typename T>
     Variant(const class AssetReference<T>& v)
@@ -416,6 +418,15 @@ public:
         ASSERT_LOW_LAYER(type.Type == VariantType::Enum);
         Variant v;
         v.SetType(MoveTemp(type));
+        v.AsUint64 = (uint64)value;
+        return MoveTemp(v);
+    }
+
+    template<typename T>
+    static typename TEnableIf<TIsEnum<T>::Value, Variant>::Type Enum(const T value)
+    {
+        Variant v;
+        v.SetType(VariantType(VariantType::Enum, StaticType<T>().GetType()));
         v.AsUint64 = (uint64)value;
         return MoveTemp(v);
     }

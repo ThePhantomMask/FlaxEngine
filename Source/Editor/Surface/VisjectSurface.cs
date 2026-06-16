@@ -62,6 +62,7 @@ namespace FlaxEditor.Surface
         private int _selectedConnectionIndex;
 
         internal int _isUpdatingBoxTypes;
+        internal int resizeableNodeIndexInParent = -1;
 
         /// <summary>
         /// True if surface supports implicit casting of the FlaxEngine.Object types into Boolean value (as simple validate check).
@@ -217,7 +218,7 @@ namespace FlaxEditor.Surface
             set
             {
                 // Clamp
-                value = Mathf.Clamp(value, 0.05f, 1.6f);
+                value = Mathf.Clamp(value, 0.05f, 1.85f);
 
                 // Check if value will change
                 if (Mathf.Abs(value - _targetScale) > 0.0001f)
@@ -423,8 +424,9 @@ namespace FlaxEditor.Surface
                 new InputActionsContainer.Binding(options => options.NodesAlignLeft, () => { AlignNodes(SelectedNodes, NodeAlignmentType.Left); }),
                 new InputActionsContainer.Binding(options => options.NodesAlignCenter, () => { AlignNodes(SelectedNodes, NodeAlignmentType.Center); }),
                 new InputActionsContainer.Binding(options => options.NodesAlignRight, () => { AlignNodes(SelectedNodes, NodeAlignmentType.Right); }),
-                new InputActionsContainer.Binding(options => options.NodesDistributeHorizontal, () => {  DistributeNodes(SelectedNodes, false); }),
-                new InputActionsContainer.Binding(options => options.NodesDistributeVertical, () => {  DistributeNodes(SelectedNodes, true); }),
+                new InputActionsContainer.Binding(options => options.NodesDistributeHorizontal, () => { DistributeNodes(SelectedNodes, false); }),
+                new InputActionsContainer.Binding(options => options.NodesDistributeVertical, () => { DistributeNodes(SelectedNodes, true); }),
+                new InputActionsContainer.Binding(options => options.FocusSelectedNodes, () => { FocusSelectionOrWholeGraph(); }),
             });
 
             Context.ControlSpawned += OnSurfaceControlSpawned;
@@ -436,7 +438,10 @@ namespace FlaxEditor.Surface
             DragHandlers.Add(_dragAssets = new DragAssets<DragDropEventArgs>(ValidateDragItem));
             DragHandlers.Add(_dragParameters = new DragNames<DragDropEventArgs>(SurfaceParameter.DragPrefix, ValidateDragParameter));
 
+            OnEditorOptionsChanged(Editor.Instance.Options.Options);
+
             ScriptsBuilder.ScriptsReloadBegin += OnScriptsReloadBegin;
+            Editor.Instance.Options.OptionsChanged += OnEditorOptionsChanged;
         }
 
         private void OnScriptsReloadBegin()
@@ -444,6 +449,11 @@ namespace FlaxEditor.Surface
             _activeVisjectCM = null;
             _cmPrimaryMenu?.Dispose();
             _cmPrimaryMenu = null;
+        }
+
+        private void OnEditorOptionsChanged(EditorOptions options)
+        {
+            _focusSelectedNodeBinding = options.Input.FocusSelectedNodes;
         }
 
         /// <summary>
@@ -502,7 +512,7 @@ namespace FlaxEditor.Surface
                 {
                     GroupID = Custom.GroupID,
                     Name = "Custom",
-                    Color = Color.Wheat
+                    Color = Color.Wheat.RGBMultiplied(0.4f),
                 };
             }
             else
@@ -584,6 +594,11 @@ namespace FlaxEditor.Surface
         public virtual bool CanSetParameters => false;
 
         /// <summary>
+        /// Gets a value indicating whether surface private parameters can be used, otherwise they will remain hidden.
+        /// </summary>
+        public virtual bool CanShowPrivateParameters => false;
+
+        /// <summary>
         /// True of the context menu should make use of a description panel drawn at the bottom of the menu
         /// </summary>
         public virtual bool UseContextMenuDescriptionPanel => false;
@@ -641,6 +656,37 @@ namespace FlaxEditor.Surface
         {
             ViewScale = (Size / areaRect.Size).MinValue * 0.95f;
             ViewCenterPosition = areaRect.Center;
+        }
+
+        /// <summary>
+        /// Adjusts the view to focus on the currently selected nodes, or the entire graph if no nodes are selected.
+        /// </summary>
+        public void FocusSelectionOrWholeGraph()
+        {
+            if (SelectedNodes.Count > 0)
+                ShowSelection();
+            else
+                ShowWholeGraph();
+        }
+
+        /// <summary>
+        /// Shows the selected controls by changing the view scale and the position.
+        /// </summary>
+        public void ShowSelection()
+        {
+            var selection = SelectedControls;
+            if (selection.Count == 0)
+                return;
+
+            // Calculate the bounds of all selected controls
+            Rectangle bounds = selection[0].Bounds;
+            for (int i = 1; i < selection.Count; i++)
+                bounds = Rectangle.Union(bounds, selection[i].Bounds);
+
+            // Add margin
+            bounds = bounds.MakeExpanded(250.0f);
+
+            ShowArea(bounds);
         }
 
         /// <summary>
@@ -810,10 +856,11 @@ namespace FlaxEditor.Surface
             int lowestCommentOrder = int.MaxValue;
             for (int i = 0; i < selection.Count; i++)
             {
-                if (selection[i] is not SurfaceComment || selection[i].IndexInParent >= lowestCommentOrder)
-                    continue;
-                hasCommentsSelected = true;
-                lowestCommentOrder = selection[i].IndexInParent;
+                if (selection[i] is ResizableSurfaceNode node && node is SurfaceComment && node.ResizeBorderControl.IndexInParent < lowestCommentOrder)
+                {
+                    hasCommentsSelected = true;
+                    lowestCommentOrder = node.ResizeBorderControl.IndexInParent;
+                }
             }
 
             return _context.CreateComment(ref surfaceArea, string.IsNullOrEmpty(text) ? "Comment" : text, new Color(1.0f, 1.0f, 1.0f, 0.2f), hasCommentsSelected ? lowestCommentOrder : -1);
@@ -1066,6 +1113,7 @@ namespace FlaxEditor.Surface
             _cmPrimaryMenu?.Dispose();
 
             ScriptsBuilder.ScriptsReloadBegin -= OnScriptsReloadBegin;
+            Editor.Instance.Options.OptionsChanged += OnEditorOptionsChanged;
 
             base.OnDestroy();
         }

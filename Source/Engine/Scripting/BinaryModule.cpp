@@ -17,7 +17,6 @@
 #include "FlaxEngine.Gen.h"
 #include "Scripting.h"
 #include "Events.h"
-#include "Internal/StdTypesContainer.h"
 
 Dictionary<Pair<ScriptingTypeHandle, StringView>, void(*)(ScriptingObject*, void*, bool)> ScriptingEvents::EventsTable;
 Delegate<ScriptingObject*, Span<Variant>, ScriptingTypeHandle, StringView> ScriptingEvents::Event;
@@ -30,6 +29,18 @@ ManagedBinaryModule* GetBinaryModuleCorlib()
     static ManagedBinaryModule assembly("corlib");
     return &assembly;
 #endif
+}
+
+MMethod* MClass::FindMethod(const char* name, int32 numParams, bool checkBaseClasses) const
+{
+    MMethod* method = GetMethod(name, numParams);
+    if (!method && checkBaseClasses)
+    {
+        MClass* base = GetBaseClass();
+        if (base)
+            method = base->FindMethod(name, numParams, true);
+    }
+    return method;
 }
 
 ScriptingTypeHandle::ScriptingTypeHandle(const ScriptingTypeInitializer& initializer)
@@ -193,7 +204,7 @@ ScriptingType::ScriptingType(const StringAnsiView& fullname, BinaryModule* modul
     Struct.SetField = setField;
 }
 
-ScriptingType::ScriptingType(const StringAnsiView& fullname, BinaryModule* module, int32 size, EnumItem* items)
+ScriptingType::ScriptingType(const StringAnsiView& fullname, BinaryModule* module, int32 size, EnumItem* items, bool stringSerialization)
     : ManagedClass(nullptr)
     , Module(module)
     , InitRuntime(DefaultInitRuntime)
@@ -204,6 +215,7 @@ ScriptingType::ScriptingType(const StringAnsiView& fullname, BinaryModule* modul
     , Size(size)
 {
     Enum.Items = items;
+    Enum.StringSerialization = stringSerialization;
 }
 
 ScriptingType::ScriptingType(const StringAnsiView& fullname, BinaryModule* module, InitRuntimeHandler initRuntime, SetupScriptVTableHandler setupScriptVTable, SetupScriptObjectVTableHandler setupScriptObjectVTable, GetInterfaceWrapper getInterfaceWrapper)
@@ -259,6 +271,7 @@ ScriptingType::ScriptingType(const ScriptingType& other)
         break;
     case ScriptingTypes::Enum:
         Enum.Items = other.Enum.Items;
+        Enum.StringSerialization = other.Enum.StringSerialization;
         break;
     case ScriptingTypes::Interface:
         Interface.SetupScriptVTable = other.Interface.SetupScriptVTable;
@@ -312,6 +325,7 @@ ScriptingType::ScriptingType(ScriptingType&& other)
         break;
     case ScriptingTypes::Enum:
         Enum.Items = other.Enum.Items;
+        Enum.StringSerialization = other.Enum.StringSerialization;
         break;
     case ScriptingTypes::Interface:
         Interface.SetupScriptVTable = other.Interface.SetupScriptVTable;
@@ -593,70 +607,56 @@ StringAnsiView ScriptingType::GetName() const
     return Fullname;
 }
 
+#if BUILD_DEBUG || USE_EDITOR
+#define INIT_TYPE(...) \
+    module->Types.AddUninitialized(); \
+    new(module->Types.Get() + TypeIndex)ScriptingType(fullname, module, ##__VA_ARGS__); \
+    if (module->TypeNameToTypeIndex.ContainsKey(fullname)) \
+        LOG(Error, "Duplicated native typename {0} from module {1}.", String(fullname), String(module->GetName())); \
+    module->TypeNameToTypeIndex[fullname] = TypeIndex;
+#else
+#define INIT_TYPE(...) \
+    module->Types.AddUninitialized(); \
+    new(module->Types.Get() + TypeIndex)ScriptingType(fullname, module, ##__VA_ARGS__); \
+    module->TypeNameToTypeIndex[fullname] = TypeIndex;
+#endif
+
 ScriptingTypeInitializer::ScriptingTypeInitializer(BinaryModule* module, const StringAnsiView& fullname, int32 size, ScriptingType::InitRuntimeHandler initRuntime, ScriptingType::SpawnHandler spawn, ScriptingTypeInitializer* baseType, ScriptingType::SetupScriptVTableHandler setupScriptVTable, ScriptingType::SetupScriptObjectVTableHandler setupScriptObjectVTable, const ScriptingType::InterfaceImplementation* interfaces)
     : ScriptingTypeHandle(module, module->Types.Count())
 {
     // Script
-    module->Types.AddUninitialized();
-    new(module->Types.Get() + TypeIndex)ScriptingType(fullname, module, size, initRuntime, spawn, baseType, setupScriptVTable, setupScriptObjectVTable, interfaces);
-#if BUILD_DEBUG
-    if (module->TypeNameToTypeIndex.ContainsKey(fullname))
-        LOG(Error, "Duplicated native typename {0} from module {1}.", String(fullname), String(module->GetName()));
-#endif
-    module->TypeNameToTypeIndex[fullname] = TypeIndex;
+    INIT_TYPE(size, initRuntime, spawn, baseType, setupScriptVTable, setupScriptObjectVTable, interfaces);
 }
 
 ScriptingTypeInitializer::ScriptingTypeInitializer(BinaryModule* module, const StringAnsiView& fullname, int32 size, ScriptingType::InitRuntimeHandler initRuntime, ScriptingType::Ctor ctor, ScriptingType::Dtor dtor, ScriptingTypeInitializer* baseType, const ScriptingType::InterfaceImplementation* interfaces)
     : ScriptingTypeHandle(module, module->Types.Count())
 {
     // Class
-    module->Types.AddUninitialized();
-    new(module->Types.Get() + TypeIndex)ScriptingType(fullname, module, size, initRuntime, ctor, dtor, baseType, interfaces);
-#if BUILD_DEBUG
-    if (module->TypeNameToTypeIndex.ContainsKey(fullname))
-        LOG(Error, "Duplicated native typename {0} from module {1}.", String(fullname), String(module->GetName()));
-#endif
-    module->TypeNameToTypeIndex[fullname] = TypeIndex;
+    INIT_TYPE(size, initRuntime, ctor, dtor, baseType, interfaces);
 }
 
 ScriptingTypeInitializer::ScriptingTypeInitializer(BinaryModule* module, const StringAnsiView& fullname, int32 size, ScriptingType::InitRuntimeHandler initRuntime, ScriptingType::Ctor ctor, ScriptingType::Dtor dtor, ScriptingType::Copy copy, ScriptingType::Box box, ScriptingType::Unbox unbox, ScriptingType::GetField getField, ScriptingType::SetField setField, ScriptingTypeInitializer* baseType, const ScriptingType::InterfaceImplementation* interfaces)
     : ScriptingTypeHandle(module, module->Types.Count())
 {
     // Structure
-    module->Types.AddUninitialized();
-    new(module->Types.Get() + TypeIndex)ScriptingType(fullname, module, size, initRuntime, ctor, dtor, copy, box, unbox, getField, setField, baseType, interfaces);
-#if BUILD_DEBUG
-    if (module->TypeNameToTypeIndex.ContainsKey(fullname))
-        LOG(Error, "Duplicated native typename {0} from module {1}.", String(fullname), String(module->GetName()));
-#endif
-    module->TypeNameToTypeIndex[fullname] = TypeIndex;
+    INIT_TYPE(size, initRuntime, ctor, dtor, copy, box, unbox, getField, setField, baseType, interfaces);
 }
 
-ScriptingTypeInitializer::ScriptingTypeInitializer(BinaryModule* module, const StringAnsiView& fullname, int32 size, ScriptingType::EnumItem* items)
+ScriptingTypeInitializer::ScriptingTypeInitializer(BinaryModule* module, const StringAnsiView& fullname, int32 size, ScriptingType::EnumItem* items, bool stringSerialization)
     : ScriptingTypeHandle(module, module->Types.Count())
 {
     // Enum
-    module->Types.AddUninitialized();
-    new(module->Types.Get() + TypeIndex)ScriptingType(fullname, module, size, items);
-#if BUILD_DEBUG
-    if (module->TypeNameToTypeIndex.ContainsKey(fullname))
-        LOG(Error, "Duplicated native typename {0} from module {1}.", String(fullname), String(module->GetName()));
-#endif
-    module->TypeNameToTypeIndex[fullname] = TypeIndex;
+    INIT_TYPE(size, items, stringSerialization);
 }
 
 ScriptingTypeInitializer::ScriptingTypeInitializer(BinaryModule* module, const StringAnsiView& fullname, ScriptingType::InitRuntimeHandler initRuntime, ScriptingType::SetupScriptVTableHandler setupScriptVTable, ScriptingType::SetupScriptObjectVTableHandler setupScriptObjectVTable, ScriptingType::GetInterfaceWrapper getInterfaceWrapper)
     : ScriptingTypeHandle(module, module->Types.Count())
 {
     // Interface
-    module->Types.AddUninitialized();
-    new(module->Types.Get() + TypeIndex)ScriptingType(fullname, module, initRuntime, setupScriptVTable, setupScriptObjectVTable, getInterfaceWrapper);
-#if BUILD_DEBUG
-    if (module->TypeNameToTypeIndex.ContainsKey(fullname))
-        LOG(Error, "Duplicated native typename {0} from module {1}.", String(fullname), String(module->GetName()));
-#endif
-    module->TypeNameToTypeIndex[fullname] = TypeIndex;
+    INIT_TYPE(initRuntime, setupScriptVTable, setupScriptObjectVTable, getInterfaceWrapper);
 }
+
+#undef INIT_TYPE
 
 CriticalSection BinaryModule::Locker;
 
@@ -835,61 +835,17 @@ namespace
         }
         return nullptr;
     }
-
-    bool VariantTypeEquals(const VariantType& type, MType* mType, bool isOut = false)
-    {
-        MClass* mClass = MCore::Type::GetClass(mType);
-        MClass* variantClass = MUtils::GetClass(type);
-        if (variantClass != mClass)
-        {
-            // Hack for Vector2/3/4 which alias with Float2/3/4 or Double2/3/4 (depending on USE_LARGE_WORLDS)
-            const auto& stdTypes = *StdTypesContainer::Instance();
-            if (mClass == stdTypes.Vector2Class && (type.Type == VariantType::Float2 || type.Type == VariantType::Double2))
-                return true;
-            if (mClass == stdTypes.Vector3Class && (type.Type == VariantType::Float3 || type.Type == VariantType::Double3))
-                return true;
-            if (mClass == stdTypes.Vector4Class && (type.Type == VariantType::Float4 || type.Type == VariantType::Double4))
-                return true;
-
-            return false;
-        }
-        return true;
-    }
 }
 
 #endif
 
-MMethod* ManagedBinaryModule::FindMethod(MClass* mclass, const ScriptingTypeMethodSignature& signature)
+MMethod* ManagedBinaryModule::FindMethod(const MClass* mclass, const ScriptingTypeMethodSignature& signature)
 {
 #if USE_CSHARP
-    if (!mclass)
-        return nullptr;
-    const auto& methods = mclass->GetMethods();
-    for (MMethod* method : methods)
-    {
-        if (method->IsStatic() != signature.IsStatic)
-            continue;
-        if (method->GetName() != signature.Name)
-            continue;
-        if (method->GetParametersCount() != signature.Params.Count())
-            continue;
-        bool isValid = true;
-        for (int32 paramIdx = 0; paramIdx < signature.Params.Count(); paramIdx++)
-        {
-            auto& param = signature.Params[paramIdx];
-            MType* type = method->GetParameterType(paramIdx);
-            if (param.IsOut != method->GetParameterIsOut(paramIdx) ||
-                !VariantTypeEquals(param.Type, type, param.IsOut))
-            {
-                isValid = false;
-                break;
-            }
-        }
-        if (isValid && VariantTypeEquals(signature.ReturnType, method->GetReturnType()))
-            return method;
-    }
-#endif
+    return mclass ? mclass->GetMethod(signature) : nullptr;
+#else
     return nullptr;
+#endif
 }
 
 #if USE_CSHARP

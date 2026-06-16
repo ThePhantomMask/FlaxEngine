@@ -1,6 +1,6 @@
 // Copyright (c) Wojciech Figat. All rights reserved.
 
-#if PLATFORM_MAC
+#if PLATFORM_MAC && !PLATFORM_SDL
 
 #include "../Window.h"
 #include "Engine/Platform/Apple/AppleUtils.h"
@@ -11,13 +11,18 @@
 #include "Engine/Platform/Base/DragDropHelper.h"
 #endif
 #include "Engine/Core/Log.h"
+#include "Engine/Core/Math/Color32.h"
 #include "Engine/Input/Input.h"
 #include "Engine/Input/Mouse.h"
 #include "Engine/Input/Keyboard.h"
 #include "Engine/Graphics/RenderTask.h"
+#include "Engine/Graphics/Textures/TextureData.h"
 #include <Cocoa/Cocoa.h>
 #include <AppKit/AppKit.h>
 #include <QuartzCore/CAMetalLayer.h>
+
+// TODO: finish this (missing mouse up when title bar drag ends)
+#define MAC_WINDOW_TITLE_BAR_CLICK 0
 
 #if USE_EDITOR
 // Data for drawing window while doing drag&drop on Mac (engine is paused during platform tick)
@@ -197,6 +202,19 @@ Float2 GetMousePosition(MacWindow* window, NSEvent* event)
     return Float2(point.x, frame.size.height - point.y) * MacPlatform::ScreenScale - GetWindowTitleSize(window);
 }
 
+NSRect GetFrameRectForClientBounds(MacWindow* macWindow, NSWindow* window, const Rectangle& clientArea)
+{
+    const float screenScale = MacPlatform::ScreenScale;
+    NSRect rect = NSMakeRect(0, 0, clientArea.Size.X / screenScale, clientArea.Size.Y / screenScale);
+    rect = [window frameRectForContentRect:rect];
+
+    Float2 pos = AppleUtils::PosToCoca(clientArea.Location) / screenScale;
+    Float2 titleSize = GetWindowTitleSize(macWindow);
+    rect.origin.x = pos.X + titleSize.X;
+    rect.origin.y = pos.Y - rect.size.height + titleSize.Y;
+    return rect;
+}
+
 class MacDropData : public IGuiData
 {
 public:
@@ -283,6 +301,15 @@ NSDragOperation GetDragDropOperation(DragDropEffect dragDropEffect)
     return YES;
 }
 
+- (BOOL)canBecomeMainWindow
+{
+    if (Window && (!Window->GetSettings().AllowInput || Window->GetSettings().Type != WindowType::Regular))
+    {
+        return NO;
+    }
+    return YES;
+}
+
 - (void)windowDidBecomeKey:(NSNotification*)notification
 {
 	// Handle resizing to be sure that content has valid size when window was resized
@@ -296,6 +323,12 @@ NSDragOperation GetDragDropOperation(DragDropEffect dragDropEffect)
 {
     if (IsWindowInvalid(Window)) return;
     Window->OnLostFocus();
+}
+
+- (void)windowDidMove:(NSNotification*)notification
+{
+    if (IsWindowInvalid(Window)) return;
+    Window->SyncWindowState();
 }
 
 - (void)windowWillClose:(NSNotification*)notification
@@ -506,8 +539,30 @@ static void ConvertNSRect(NSScreen *screen, NSRect *r)
     if (IsWindowInvalid(Window)) return;
 	Float2 mousePos = GetMousePosition(Window, event);
     mousePos = Window->ClientToScreen(mousePos);
+
+    if ([event clickCount] == 1 && !Input::Mouse->IsRelative())
+    {
+        WindowHitCodes hit = WindowHitCodes::Client;
+        bool handled = false;
+        Window->OnHitTest(mousePos, hit, handled);
+
+        if (hit == WindowHitCodes::Caption)
+        {
+            bool consumed = false;
+            Window->OnLeftButtonHit(hit, consumed);
+
+            if (!consumed)
+            {
+                [(NSWindow*)Window->GetNativePtr() performWindowDragWithEvent:event];
+                Window->SyncWindowState();
+            }
+
+            return;
+        }
+    }
+
     MouseButton mouseButton = MouseButton::Left;
-    if ([event clickCount] == 2)
+    if ([event clickCount] == 2 && !Input::Mouse->IsRelative())
         Input::Mouse->OnMouseDoubleClick(mousePos, mouseButton, Window);
     else
 	    Input::Mouse->OnMouseDown(mousePos, mouseButton, Window);
@@ -544,7 +599,7 @@ static void ConvertNSRect(NSScreen *screen, NSRect *r)
     if (IsWindowInvalid(Window)) return;
 	Float2 mousePos = GetMousePosition(Window, event);
     MouseButton mouseButton = MouseButton::Right;
-    if ([event clickCount] == 2)
+    if ([event clickCount] == 2 && !Input::Mouse->IsRelative())
         Input::Mouse->OnMouseDoubleClick(Window->ClientToScreen(mousePos), mouseButton, Window);
     else
 	    Input::Mouse->OnMouseDown(Window->ClientToScreen(mousePos), mouseButton, Window);
@@ -582,7 +637,7 @@ static void ConvertNSRect(NSScreen *screen, NSRect *r)
     default:
         return;
     }
-    if ([event clickCount] == 2)
+    if ([event clickCount] == 2 && !Input::Mouse->IsRelative())
         Input::Mouse->OnMouseDoubleClick(Window->ClientToScreen(mousePos), mouseButton, Window);
     else
 	    Input::Mouse->OnMouseDown(Window->ClientToScreen(mousePos), mouseButton, Window);
@@ -689,14 +744,65 @@ static void ConvertNSRect(NSScreen *screen, NSRect *r)
 
 @end
 
+#if MAC_WINDOW_TITLE_BAR_CLICK
+
+@interface MacResponderImpl : NSResponder
+{
+    MacWindow* Window;
+    bool TrackingMouseDown;
+}
+
+- (void)setWindow:(MacWindow*)window;
+
+@end
+
+@implementation MacResponderImpl
+
+- (void)setWindow:(MacWindow*)window
+{
+    Window = window;
+    TrackingMouseDown = false;
+}
+
+- (void)mouseDown:(NSEvent*)event
+{
+    if (IsWindowInvalid(Window) || TrackingMouseDown) return;
+	Float2 mousePos = GetMousePosition(Window, event);
+    if (mousePos.Y < 0)
+    {
+        // Titlebar click
+        bool result = false;
+        Window->OnLeftButtonHit(WindowHitCodes::Caption, result);
+        TrackingMouseDown = result;
+    }
+}
+
+- (void)mouseUp:(NSEvent*)event
+{
+    if (IsWindowInvalid(Window)) return;
+    //NSPoint point = [event locationInWindow];
+    //LOG(Warning, "Mouse up! at: {}x{}", point.x, point.y);
+    if (TrackingMouseDown)
+    {
+        TrackingMouseDown = false;
+        Float2 mousePos = GetMousePosition(Window, event);
+        Window->OnMouseUp(mousePos, MouseButton::Left);
+    }
+}
+
+@end
+
+#endif
+
 MacWindow::MacWindow(const CreateWindowSettings& settings)
     : WindowBase(settings)
 {
+    // Setup size and styles
     _clientSize = Float2(settings.Size.X, settings.Size.Y);
     Float2 pos = AppleUtils::PosToCoca(settings.Position);
     NSRect frame = NSMakeRect(pos.X, pos.Y - settings.Size.Y, settings.Size.X, settings.Size.Y);
     NSUInteger styleMask = NSWindowStyleMaskClosable;
-    if (settings.IsRegularWindow)
+    if (settings.Type == WindowType::Regular)
     {
         styleMask |= NSWindowStyleMaskTitled;
         if (settings.AllowMinimize)
@@ -727,6 +833,7 @@ MacWindow::MacWindow(const CreateWindowSettings& settings)
     frame.size.width /= screenScale;
     frame.size.height /= screenScale;
 
+    // Create window
     MacWindowImpl* window = [[MacWindowImpl alloc] initWithContentRect:frame
         styleMask:(styleMask)
         backing:NSBackingStoreBuffered
@@ -735,6 +842,7 @@ MacWindow::MacWindow(const CreateWindowSettings& settings)
     view.wantsLayer = YES;
     [view setWindow:this];
     window.title = (__bridge NSString*)AppleUtils::ToString(settings.Title);
+    window.releasedWhenClosed = NO;
     [window setWindow:this];
     [window setReleasedWhenClosed:NO];
     [window setMinSize:NSMakeSize(settings.MinimumSize.X, settings.MinimumSize.Y)];
@@ -744,6 +852,8 @@ MacWindow::MacWindow(const CreateWindowSettings& settings)
     [window setContentView:view];
     if (settings.AllowInput)
         [window setAcceptsMouseMovedEvents:YES];
+    if (settings.IsTopmost)
+        [window setLevel:NSFloatingWindowLevel];
     [window setDelegate:window];
     _window = window;
     _view = view;
@@ -752,27 +862,44 @@ MacWindow::MacWindow(const CreateWindowSettings& settings)
         [view registerForDraggedTypes:@[NSPasteboardTypeFileURL, NSPasteboardTypeString]];
     }
 
+#if MAC_WINDOW_TITLE_BAR_CLICK
+    // Plug into superview to receive mouse events for the title
+    MacResponderImpl* responder = [[MacResponderImpl alloc] init];
+    [responder setWindow:this];
+    NSView* superview = [[window contentView] superview];
+    [superview setNextResponder:responder];
+#endif
+
     // Rescale contents
 	CALayer* layer = [view layer];
 	if (layer)
 		layer.contentsScale = screenScale;
-
-    // TODO: impl Parent for MacWindow
-    // TODO: impl ShowInTaskbar for MacWindow
-    // TODO: impl IsTopmost for MacWindow
 }
 
 MacWindow::~MacWindow()
 {
-    NSWindow* window = (NSWindow*)_window;
-    [window close];
-    [window release];
+    if (NSWindow* window = (NSWindow*)_window)
+    {
+        [window close];
+        [window release];
+    }
     _window = nullptr;
     _view = nullptr;
 }
 
+void MacWindow::SyncWindowState()
+{
+    NSWindow* window = (NSWindow*)_window;
+    if (window)
+    {
+        _minimized = window.miniaturized;
+        _maximized = window.zoomed;
+    }
+}
+
 void MacWindow::CheckForResize(float width, float height)
 {
+    SyncWindowState();
     const Float2 clientSize(width, height);
 	if (clientSize != _clientSize)
 	{
@@ -836,8 +963,13 @@ void MacWindow::Show()
 
         // Show
         NSWindow* window = (NSWindow*)_window;
+        if (_settings.Parent)
+        {
+            NSWindow* parent = (NSWindow*)_settings.Parent->GetNativePtr();
+            [parent addChildWindow:window ordered:NSWindowAbove];
+        }
         if (_settings.AllowInput)
-            [window makeKeyAndOrderFront:window];
+            [window makeKeyAndOrderFront:nil];
         else
             [window orderFront:window];
         if (_settings.ActivateWhenFirstShown)
@@ -855,12 +987,44 @@ void MacWindow::Hide()
     {
         SetCursor(CursorType::Default);
 
-        // Hide
+        // Hide (order out doesn't work for miniaturized windows)
         NSWindow* window = (NSWindow*)_window;
-        [window orderOut:window];
+        const BOOL wasKey = [window isKeyWindow];
+        if ([window isMiniaturized])
+            [window close];
+        else
+            [window orderOut:nil];
+
+        // Transfer focus back to the parent when hiding popup
+        if (_settings.Parent && wasKey && _settings.Type != WindowType::Popup && _settings.Type != WindowType::Tooltip)
+        {
+            NSWindow* parent = (NSWindow*)_settings.Parent->GetNativePtr();
+            [parent makeKeyAndOrderFront:nil];
+        }
 
         // Base
         WindowBase::Hide();
+    }
+}
+
+void MacWindow::Close(ClosingReason reason)
+{
+    const BOOL wasKey = _window && [(NSWindow*)_window isKeyWindow];
+    WindowBase::Close(reason);
+
+    // Closing can be cancelled by managed Window.Closing handlers.
+    if (!IsClosed())
+        return;
+    
+    if (NSWindow* window = (NSWindow*)_window)
+    {
+        [window close];
+    }
+    
+    if (_settings.Parent && wasKey && _settings.Type != WindowType::Popup && _settings.Type != WindowType::Tooltip)
+    {
+        NSWindow* parent = (NSWindow*)_settings.Parent->GetNativePtr();
+        [parent makeKeyAndOrderFront:nil];
     }
 }
 
@@ -880,17 +1044,43 @@ void MacWindow::Maximize()
     if (!_settings.AllowMaximize)
         return;
     NSWindow* window = (NSWindow*)_window;
+    if (!window)
+        return;
     if (!window.zoomed)
+    {
+        if (!_maximized)
+        {
+            _restoreClientBounds = GetClientBounds();
+            _hasRestoreClientBounds = true;
+        }
         [window zoom:nil];
+    }
+    SyncWindowState();
 }
 
 void MacWindow::Restore()
 {
     NSWindow* window = (NSWindow*)_window;
+    if (!window)
+        return;
     if (window.miniaturized)
+    {
         [window deminiaturize:nil];
+        SyncWindowState();
+    }
+    else if (_maximized && _hasRestoreClientBounds)
+    {
+        const Rectangle restoreClientBounds = _restoreClientBounds;
+        _hasRestoreClientBounds = false;
+        NSRect restoreFrame = GetFrameRectForClientBounds(this, window, restoreClientBounds);
+        [window setFrame:restoreFrame display:YES animate:YES];
+        _maximized = false;
+    }
     else if (window.zoomed)
+    {
         [window zoom:nil];
+        SyncWindowState();
+    }
 }
 
 bool MacWindow::IsForegroundWindow() const
@@ -914,17 +1104,7 @@ void MacWindow::SetClientBounds(const Rectangle& clientArea)
     NSWindow* window = (NSWindow*)_window;
     if (!window)
         return;
-    const float screenScale = MacPlatform::ScreenScale;
-
-    NSRect oldRect = [window frame];
-    NSRect newRect = NSMakeRect(0, 0, clientArea.Size.X / screenScale, clientArea.Size.Y / screenScale);
-    newRect = [window frameRectForContentRect:newRect];
-
-    Float2 pos = AppleUtils::PosToCoca(clientArea.Location) / screenScale;
-    Float2 titleSize = GetWindowTitleSize(this);
-    newRect.origin.x = pos.X + titleSize.X;
-    newRect.origin.y = pos.Y - newRect.size.height + titleSize.Y;
-
+    NSRect newRect = GetFrameRectForClientBounds(this, window, clientArea);
     [window setFrame:newRect display:YES];
 }
 
@@ -1122,6 +1302,39 @@ void MacWindow::SetCursor(CursorType type)
         }
         [cursor set];
     }
+}
+
+void MacWindow::SetIcon(TextureData& icon)
+{
+    // Get pixels
+    Array<Color32> colorData;
+    icon.GetPixels(colorData);
+
+    // Convert to Cocoa image
+    NSImage* image = [[NSImage alloc] initWithSize:NSMakeSize(icon.Width, icon.Height)];
+    if (image == nil)
+        return;
+    NSBitmapImageRep* rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL
+        pixelsWide:icon.Width
+        pixelsHigh:icon.Height
+        bitsPerSample:8
+        samplesPerPixel:4
+        hasAlpha:YES
+        isPlanar:NO
+        colorSpaceName:NSDeviceRGBColorSpace
+        bytesPerRow:icon.Width * 4
+        bitsPerPixel:32];
+    if (rep == nil)
+        return;
+
+    // Copy the pixels
+    Platform::MemoryCopy([rep bitmapData], colorData.Get(), colorData.Count() * sizeof(Color32));
+
+    // Add the image representation
+    [image addRepresentation:rep];
+
+    // Set app icon
+    [NSApp setApplicationIconImage:image];
 }
 
 #endif
