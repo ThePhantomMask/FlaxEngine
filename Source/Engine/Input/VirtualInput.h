@@ -5,6 +5,7 @@
 #include "Engine/Core/Types/String.h"
 #include "Enums.h"
 #include "KeyboardKeys.h"
+#include "Engine/Core/Math/Vector2.h"
 
 /// <summary>
 /// Maps keyboard, controller, or mouse inputs to a "friendly name" that will later be bound to continuous game behavior, such as movement. The inputs mapped in AxisMappings are continuously polled, even if they are just reporting that their input value.
@@ -73,6 +74,7 @@ API_STRUCT() struct AxisConfig
     AxisMappingType Type;
 
     bool IsAxisMappings = Type == AxisMappingType::Axis;
+    bool IsVectorMapping = Type == AxisMappingType::Vector;
 
     /// <summary>
     /// The axis type (mouse, gamepad, etc.).
