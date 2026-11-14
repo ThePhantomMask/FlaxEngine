@@ -1115,7 +1115,13 @@ namespace FlaxEngine.Interop
                 {
                     Type type = instance.GetType();
                     Assertions.Assert.IsTrue(type.Name == "ConcurrentDictionary`2" || type.Name == "Hashtable" || type.Name == "WeakHashtable");
-                    type.GetMethods(BindingFlags.Instance | BindingFlags.Public).FirstOrDefault(x => x.Name == "Clear")?.Invoke(instance, Array.Empty<object>());
+                    var clear = type.GetMethods(BindingFlags.Instance | BindingFlags.Public).FirstOrDefault(x => x.Name == "Clear" && x.GetParameters().Length == 0);
+                    if (clear == null)
+                    {
+                        Debug.Logger.LogHandler.LogWrite(LogType.Warning, $"Failed to clear TypeDescriptor cache of type {type.FullName} (Clear method not found).");
+                        return;
+                    }
+                    clear?.Invoke(instance, Array.Empty<object>());
                 }
             }
 
